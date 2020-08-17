@@ -619,14 +619,17 @@ static int internalAdd(RedisModuleCtx *ctx, Series *series, api_timestamp_t time
 static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleString *timestampStr, RedisModuleString *valueStr, RedisModuleString **argv, int argc){
     RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ|REDISMODULE_WRITE);
     double value;
+    bool nextTS = false;
     api_timestamp_t timestamp;
     if ((RedisModule_StringToDouble(valueStr, &value) != REDISMODULE_OK))
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid value");
 
     if ((RedisModule_StringToLongLong(timestampStr, (long long int *) &timestamp) != REDISMODULE_OK)) {
         // if timestamp is "*", take current time (automatic timestamp)
-        if(RMUtil_StringEqualsC(timestampStr, "*"))
-            timestamp = (u_int64_t) RedisModule_Milliseconds();
+        if (RMUtil_StringEqualsC(timestampStr, "*") ||
+           (RMUtil_StringEqualsC(timestampStr, "+") && (nextTS = true))) {
+                timestamp = (u_int64_t) RedisModule_Milliseconds();
+        }
         else
             return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
     }
@@ -651,6 +654,12 @@ static inline int add(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModu
     } else {
         series = RedisModule_ModuleTypeGetValue(key);
     }
+
+    // for "+", will insert sample with latest timestamp +1
+    if (nextTS && timestamp <= series->lastTimestamp) {
+        timestamp = series->lastTimestamp + 1;
+    }
+
     int rv = internalAdd(ctx, series, timestamp, value);
     RedisModule_CloseKey(key);
     return rv;
@@ -931,9 +940,11 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid increase/decrease value");
     }
 
+    bool nextTS = false;
     long long currentUpdatedTime = -1;
     int timestampLoc = RMUtil_ArgIndex("TIMESTAMP", argv, argc);
-    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*")) {
+    if (timestampLoc == -1 || RMUtil_StringEqualsC(argv[timestampLoc + 1], "*") ||
+                             (RMUtil_StringEqualsC(argv[timestampLoc + 1], "+") && (nextTS = true))) {
         currentUpdatedTime = RedisModule_Milliseconds();
     } else if(RedisModule_StringToLongLong(argv[timestampLoc + 1], (long long *) &currentUpdatedTime) != REDISMODULE_OK) {
         return RedisModule_ReplyWithError(ctx, "TSDB: invalid timestamp");
@@ -945,6 +956,10 @@ int TSDB_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         result += incrby;
     } else {
         result -= incrby;
+    }
+
+    if (nextTS && currentUpdatedTime <= series->lastTimestamp) {
+        currentUpdatedTime = series->lastTimestamp + 1;
     }
 
     int rv = internalAdd(ctx, series, currentUpdatedTime, result);

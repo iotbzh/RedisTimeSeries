@@ -1344,6 +1344,30 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             r.execute_command('restore test_key 0', dump)
             assert r.execute_command('ts.range test_key - +') == before
 
+    def test_plus_timestamp(self):
+        with self.redis() as r:
+            samples = 10
+            r.execute_command('ts.create test_key')
+            for i in range(samples):
+                assert r.execute_command('ts.add test_key +', i)
+            res = r.execute_command('ts.range test_key 0 -1')
+            assert res[0][0] == res[9][0] - (samples - 1)
+
+            for i in range(samples):
+                assert r.execute_command('ts.incrby test_key 1 timestamp +')
+            res = r.execute_command('ts.range test_key 0 -1')
+            assert len(res) == 20
+            assert res[10][0] == res[19][0] - (samples - 1)
+
+            # ensure "*" fails
+            for i in range(samples):
+                with pytest.raises(redis.ResponseError):
+                    assert r.execute_command('ts.add test_key *', i)
+            
+            for i in range(samples):
+                with pytest.raises(redis.ResponseError):
+                    assert r.execute_command('ts.incrby test_key 1 timestamp *')
+            
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES, 
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):
     def test_autocreate(self):
