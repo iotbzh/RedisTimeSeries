@@ -10,7 +10,7 @@ def test_ooo_variations(env):
                        "args": ["--key-prefix", "", "--distinct-client-seed", "--command-key-pattern=P"]}
     master_nodes_list = env.getMasterNodesList()
     print(",".join(
-        ["#clients", "compressed", "chunk_size", "chunkCount", "memoryUsage", "ooo_percentage", "ops_sec", "p50", "p99",
+        ["#clients", "compressed", "chunk_size", "chunkCount", "total_samples", "memoryUsage", "ooo_percentage", "ops_sec", "p50", "p99",
          "p999", "usecs_per_call"]))
     pipeline = 50 
     for n_clients in [1, 2, 3, 4]:
@@ -18,7 +18,7 @@ def test_ooo_variations(env):
             for chunk_size in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192]:
                 # Create a temporary directory
                 test_dir = tempfile.mkdtemp()
-                config = get_default_memtier_config(1, n_clients, 50000, pipeline, "ts.add ts __key__ 1.0")
+                config = get_default_memtier_config(1, n_clients, 50000, pipeline, "ts.add ts __key__ __key__")
                 add_required_env_arguments(benchmark_specs, config, env, master_nodes_list)
 
                 config = RunConfig(test_dir, env.testName, config, {})
@@ -47,6 +47,7 @@ def test_ooo_variations(env):
 
                 master_nodes_connections = env.getOSSMasterNodesConnectionList()
                 output = env.execute_command('ts.info', 'ts')
+                total_samples = float(output[1])
                 ooo_percentage = float(output[3])
                 memoryUsage = float(output[5])
                 chunkCount = float(output[13])
@@ -56,7 +57,7 @@ def test_ooo_variations(env):
                 ts_add_stats = merged_command_stats['cmdstat_ts.add']
                 usecs_per_call = float(ts_add_stats['usec']) / float(ts_add_stats['calls'])
                 print(",".join([str(x) for x in
-                                [n_clients, compressed, chunk_size, chunkCount, memoryUsage, ooo_percentage, ops_sec,
+                                [n_clients, compressed, chunk_size, chunkCount, total_samples, memoryUsage, ooo_percentage, ops_sec,
                                  p50, p99, p999, usecs_per_call]]))
                 env.execute_command('flushall')
                 env.execute_command('config','resetstat')
