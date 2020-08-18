@@ -11,6 +11,7 @@
 #include "indexer.h"
 #include "module.h"
 
+#include <assert.h>
 #include <math.h>
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
@@ -615,7 +616,7 @@ int SeriesCalcRange(Series *series,
         aggObject->freeContext(rule->aggContext);
         rule->aggContext = context;
     } else {
-        *val = aggObject->finalize(context);
+        aggObject->finalize(context, val);
         aggObject->freeContext(context);
     }
     return TSDB_OK;
@@ -623,4 +624,37 @@ int SeriesCalcRange(Series *series,
 
 timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
     return timestamp - (timestamp % window);
+}
+
+timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
+    *skipped = 0;
+    if (series->totalSamples == 0) {
+        return 0;
+    }
+
+    size_t i = 0;
+    Chunk_t *chunk;
+    bool rev = false;
+    Sample sample = { 0 };
+    ChunkFuncs *funcs = series->funcs;
+    timestamp_t minTimestamp =
+        series->retentionTime ? series->lastTimestamp - series->retentionTime : 0;
+
+    SeriesTrim(series);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    RedisModule_DictNextC(iter, NULL, (void *)&chunk);
+
+    // should never fail since we just trimmed
+    assert(minTimestamp <= funcs->GetLastTimestamp(chunk));
+
+    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk, rev);
+    sample.timestamp = funcs->GetFirstTimestamp(chunk);
+    while (sample.timestamp < minTimestamp) {
+        funcs->ChunkIteratorGetNext(chunkIter, &sample);
+        ++i;
+    }
+    *skipped = i;
+    funcs->FreeChunkIterator(chunkIter, rev);
+    RedisModule_DictIteratorStop(iter);
+    return sample.timestamp;
 }

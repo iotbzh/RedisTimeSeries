@@ -1,5 +1,9 @@
 pytest==3.0.7
-redis==2.10.5
 rmtest==0.7.0
 ramp-packer
 statistics
+git+https://github.com/RedisLabs/mbdirector.git@master
+redis>=3.0.0
+git+https://github.com/Grokzen/redis-py-cluster.git@master
+git+https://github.com/RedisLabsModules/RLTest.git@master
+git+https://github.com/filipecosta90/mbdirector.git@master
