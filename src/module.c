@@ -286,7 +286,7 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     const long long totalInserts = SeriesGetNumInserts(series);
     const long long totalUpserts = SeriesGetNumUpserts(series);
     double OutOfOrderRate = 0.0;
-    if (totalInserts!=0){
+    if (totalInserts != 0) {
         OutOfOrderRate = ((double)totalUpserts) / ((double)totalInserts) * 100.0;
     }
     char buf[7];
