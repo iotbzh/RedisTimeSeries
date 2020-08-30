@@ -406,10 +406,39 @@ int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
 }
 
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
-	if(RMUtil_StringEquals(series->srcKey, srctKey)){
-		RedisModule_FreeString(NULL, series->srcKey);
-		series->srcKey = NULL;
-		return TRUE;
-	}
-	return FALSE;
+    if (RMUtil_StringEquals(series->srcKey, srctKey)) {
+        RedisModule_FreeString(NULL, series->srcKey);
+        series->srcKey = NULL;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+timestamp_t getFirstValidTimestamp(Series *series, long long *skipped) {
+    *skipped = 0;
+    if (series->totalSamples == 0) {
+        return 0;
+    }
+
+    size_t i = 0;
+    Chunk_t *chunk;
+    Sample sample = { 0 };
+    ChunkFuncs *funcs = series->funcs;
+    timestamp_t minTimestamp =
+        series->retentionTime ? series->lastTimestamp - series->retentionTime : 0;
+
+    SeriesTrim(series);
+    RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
+    RedisModule_DictNextC(iter, NULL, (void *)&chunk);
+
+    ChunkIter_t *chunkIter = funcs->NewChunkIterator(chunk);
+    sample.timestamp = funcs->GetFirstTimestamp(chunk);
+    while (sample.timestamp < minTimestamp) {
+        funcs->ChunkIteratorGetNext(chunkIter, &sample);
+        ++i;
+    }
+    *skipped = i;
+    funcs->FreeChunkIterator(chunkIter);
+    RedisModule_DictIteratorStop(iter);
+    return sample.timestamp;
 }

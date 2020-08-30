@@ -249,12 +249,15 @@ int TSDB_info(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithArray(ctx, 10*2);
 
+    long long skippedSamples;
+    long long firstTimestamp = getFirstValidTimestamp(series, &skippedSamples);
+
     RedisModule_ReplyWithSimpleString(ctx, "totalSamples");
-    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series));
+    RedisModule_ReplyWithLongLong(ctx, SeriesGetNumSamples(series) - skippedSamples);
     RedisModule_ReplyWithSimpleString(ctx, "memoryUsage");
     RedisModule_ReplyWithLongLong(ctx, SeriesMemUsage(series));
     RedisModule_ReplyWithSimpleString(ctx, "firstTimestamp");
-    RedisModule_ReplyWithLongLong(ctx, getSeriesFirstTimestamp(series));
+    RedisModule_ReplyWithLongLong(ctx, firstTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "lastTimestamp");
     RedisModule_ReplyWithLongLong(ctx, series->lastTimestamp);
     RedisModule_ReplyWithSimpleString(ctx, "retentionTime");

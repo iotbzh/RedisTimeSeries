@@ -69,5 +69,8 @@ SeriesIterator SeriesQuery(Series *series, api_timestamp_t minTimestamp, api_tim
 int SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
 void SeriesIteratorClose(SeriesIterator *iterator);
 
+// return first timestamp in retention window, and set `skipped` to number of samples outside of retention
+timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
+
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 #endif /* TSDB_H */
