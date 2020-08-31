@@ -13,7 +13,7 @@
 #include "generic_chunk.h"
 
 // Initialize compressed chunk
-Chunk_t *Compressed_NewChunk(size_t size);
+Chunk_t *Compressed_NewChunk(bool, size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
 Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 
@@ -33,8 +33,8 @@ timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp (Chunk_t *chunk);
 
 // RDB
-void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io);
-void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io);
+void Compressed_SaveToRDB(Chunk_t *chunk, struct RedisModuleIO *io, bool blob);
+void Compressed_LoadFromRDB(Chunk_t **chunk, struct RedisModuleIO *io, bool blob);
 
 /* Used in tests */
 u_int64_t getIterIdx(ChunkIter_t *iter);

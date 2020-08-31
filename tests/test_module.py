@@ -35,6 +35,7 @@ class TSInfo(object):
 
     def __init__(self, args):
         response = dict(zip(args[::2], args[1::2]))
+
         if 'rules' in response: self.rules = response['rules']
         if 'sourceKey' in response: self.sourceKey = response['sourceKey']
         if 'chunkCount' in response: self.chunk_count = response['chunkCount']
@@ -45,7 +46,8 @@ class TSInfo(object):
         if 'lastTimestamp' in response: self.last_time_stamp = response['lastTimestamp']
         if 'firstTimestamp' in response: self.first_time_stamp = response['firstTimestamp']
         if 'chunkSize' in response: self.chunk_size_bytes = response['chunkSize']
-        if 'chunkType' in response: self.chunk_type = response['chunkType']
+	if 'chunkType' in response: self.chunk_type = response['chunkType']
+	if 'type' in response: self.type = response['type']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
@@ -58,7 +60,8 @@ class TSInfo(object):
         self.retention_msecs == other.retention_msecs and \
         self.last_time_stamp == other.last_time_stamp and \
         self.first_time_stamp == other.first_time_stamp and \
-        self.chunk_size_bytes == other.chunk_size_bytes
+        self.chunk_size_bytes == other.chunk_size_bytes and \
+	self.type == other.type
 
 class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
     def _get_ts_info(self, redis, key):
@@ -204,6 +207,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             actual_result = r.execute_command('TS.range', 'tester', start_ts, start_ts + samples_count)
             assert expected_result == actual_result
             expected_result = [
+	      'type' , 'numeric',
               'totalSamples', 1500L, 'memoryUsage', 1166,
               'firstTimestamp', start_ts, 'chunkCount', 1L,
               'labels', [['name', 'brown'], ['color', 'pink']],
@@ -995,6 +999,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             ts = time.time()
             assert r.execute_command('TS.ADD', 'tester1', str(int(ts)), str(ts), 'RETENTION', '666', 'LABELS', 'name', 'blabla') == int(ts)
             info = self._get_ts_info(r, 'tester1')
+
             assert info.total_samples == 1L
             assert info.retention_msecs == 666L
             assert info.labels == {'name': 'blabla'}
@@ -1349,7 +1354,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3L and info.memory_usage == 4136L
+            assert info.total_samples == 3L and info.memory_usage == 4144L
 
             # rdb load
             data = r.execute_command('dump', 'not_compressed')
@@ -1360,7 +1365,7 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
             assert [[1L, '3.5'], [2L, '4.5'], [3L, '5.5']] == \
                         r.execute_command('ts.range not_compressed 0 -1')
             info = self._get_ts_info(r, 'not_compressed')
-            assert info.total_samples == 3L and info.memory_usage == 4136L
+            assert info.total_samples == 3L and info.memory_usage == 4144L
             # test deletion
             assert r.delete('not_compressed')
 
@@ -1742,6 +1747,140 @@ class RedisTimeseriesTests(ModuleTestCase(REDISTIMESERIES)):
                 assert r.execute_command('ts.add', 'tester', i, i*1.1) == i
             assert r.execute_command('ts.add', 'tester', 99, 1) == 99
             assert r.execute_command('ts.add', 'tester', 98, 1) == 98
+
+    def test_blob(self):
+	with self.redis() as r:
+	    r.execute_command('ts.create', 'blob1', 'BLOB')
+	    assert 'blob' == self._get_ts_info(r, 'blob1').type
+	    r.execute_command('ts.add', 'blob2', 1, 'value1', 'BLOB')
+	    assert 'blob' == self._get_ts_info(r, 'blob1').type
+	    res = r.execute_command('ts.range', 'blob2', '-', '+')
+
+	    assert len(res) == 1
+	    assert res[0][0] == 1
+	    assert res[0][1] == 'value1'
+	    r.execute_command('ts.add', 'blob2', 2, 'value2' )
+	    r.execute_command('ts.add', 'blob2', 3, 'value3' )
+	    res = r.execute_command('ts.range', 'blob2', '-', '+')
+
+	    assert len(res) == 3
+	    ### upsert ###
+	    r.execute_command('ts.add', 'blob2', 2, 'new_value2')
+	    res = r.execute_command('ts.range', 'blob2', '-', '+')
+
+	    assert len(res) == 3
+
+	    assert res[0][0] == 1
+	    assert res[0][1] == 'value1'
+	    assert res[1][0] == 2
+	    assert res[1][1] == 'new_value2'
+	    assert res[2][0] == 3
+	    assert res[2][1] == 'value3'
+
+	    ### aggregation count ###
+	    res = r.execute_command('ts.range', 'blob2', '-', '+', 'AGGREGATION', 'count', 10)
+	    assert res[0][1] == '3'
+
+	    ### Forbidden commands ###
+	    forbidden = False;
+
+	    try:
+		res = r.execute_command('ts.incrby', 'blob2', 1)
+	    except:
+		forbidden = True;
+
+	    assert forbidden == True
+
+	    forbidden = False;
+
+	    try:
+		res = r.execute_command('ts.decrby', 'blob2', 1)
+	    except:
+		forbidden = True;
+
+	    assert forbidden == True
+
+	    ### downsampling ###
+	    res = r.execute_command('ts.create', 'blob3', 'BLOB')
+	    res = r.execute_command('ts.create', 'blob3_downsample_first', 'BLOB')
+	    res = r.execute_command('ts.create', 'blob3_downsample_last', 'BLOB')
+	    res = r.execute_command('ts.create', 'blob3_count', 'BLOB')
+
+	    res = r.execute_command('ts.createrule', 'blob3', 'blob3_downsample_last', 'AGGREGATION', 'last', 3)
+	    res = r.execute_command('ts.createrule', 'blob3', 'blob3_downsample_first', 'AGGREGATION', 'first', 3)
+
+	    forbidden = False;
+
+	    try:
+		res = r.execute_command('ts.createrule', 'blob3', 'blob3_count', 'AGGREGATION', 'count', 3)
+	    except:
+		# must catch 'TSDB: the destination key is of binary type and cannot hold an aggregation count'
+		forbidden = True;
+
+	    assert forbidden == True
+
+	    # re-create it with scalar type
+	    r.execute_command('del', 'blob3_count')
+	    res = r.execute_command('ts.create', 'blob3_count')
+	    res = r.execute_command('ts.createrule', 'blob3', 'blob3_count', 'AGGREGATION', 'count', 3)
+	    # test save of empty aggregated count
+
+	    for i in range(1,10):
+		r.execute_command('ts.add', 'blob3', i, 'value'+str(i) )
+
+	    res = r.execute_command('ts.range', 'blob3_downsample_last', '-', '+')
+
+	    assert res[0][0] == 0L
+	    assert res[0][1] == 'value2'
+
+	    assert res[1][0] == 3L
+	    assert res[1][1] == 'value5'
+
+	    assert res[2][0] == 6L
+	    assert res[2][1] == 'value8'
+
+	    res = r.execute_command('ts.range', 'blob3_downsample_first', '-', '+')
+	    assert res[0][0] == 0L
+	    assert res[0][1] == 'value1'
+
+	    assert res[1][0] == 3L
+	    assert res[1][1] == 'value3'
+
+	    assert res[2][0] == 6L
+	    assert res[2][1] == 'value6'
+
+	    res = r.execute_command('ts.range', 'blob3_count', '-', '+')
+	    assert len(res) == 3
+
+	    # test save of empty blob
+	    res = r.execute_command('ts.create', 'empty', 'BLOB')
+
+	    res = r.execute_command('SAVE')
+
+	    data = r.execute_command('DUMP', 'blob3')
+	    r.execute_command('del', 'blob3')
+
+	    res = r.execute_command('ts.range', 'blob3_downsample_last', '-', '+')
+	    ### Test after deletion of source (blob must be unchanged) ###
+
+	    assert res[0][1] == 'value2'
+	    assert res[1][1] == 'value5'
+	    assert res[2][1] == 'value8'
+
+
+	with self.redis() as r:
+	    r.execute_command('RESTORE', 'blob3', 0, data)
+	    info = self._get_ts_info(r, 'blob3')
+            assert info.total_samples == 9L
+
+	    res = r.execute_command('TS.RANGE', 'blob3', '-', '+', 'AGGREGATION', 'LAST', 3)
+	    assert len(res) == 4
+
+	    res = r.execute_command('TS.RANGE', 'blob3', '-', '+', 'AGGREGATION', 'FIRST', 3)
+	    assert len(res) == 4
+
+            assert r.delete('blob3')
+
 
 class GlobalConfigTests(ModuleTestCase(REDISTIMESERIES,
         module_args=['COMPACTION_POLICY', 'max:1m:1d;min:10s:1h;avg:2h:10d;avg:3d:100d'])):

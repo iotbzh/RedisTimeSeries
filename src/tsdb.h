@@ -39,7 +39,7 @@ typedef struct Series {
     short options;
     CompactionRule *rules;
     timestamp_t lastTimestamp;
-    double lastValue;
+    SampleValue lastValue;
     Label *labels;
     RedisModuleString *keyName;
     size_t labelsCount;
@@ -61,13 +61,14 @@ typedef struct SeriesIterator {
     void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 
+
 Series *NewSeries(RedisModuleString *keyName, CreateCtx *cCtx);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
-int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
-int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value, DuplicatePolicy dp_override);
+int SeriesAddSample(Series *series, api_timestamp_t timestamp, SampleValue value);
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, SampleValue value, DuplicatePolicy dp_override);
 int SeriesUpdateLastSample(Series *series);
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
@@ -93,6 +94,8 @@ timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 
 // return first timestamp in retention window, and set `skipped` to number of samples outside of retention
 timestamp_t getFirstValidTimestamp(Series *series, long long *skipped);
+
+bool SeriesIsBlob(const Series * series);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 

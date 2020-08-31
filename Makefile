@@ -47,5 +47,15 @@ unittests:
 pack:
 	@$(MAKE) -C src package
 
+valgrind:
+	@$(MAKE) -C src $@
+
+run:
+	@$(MAKE) -C src $@
+
+gdb:
+	@$(MAKE) -C src $@
+
+
 # deploy:
 #	@make -C src deploy

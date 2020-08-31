@@ -69,13 +69,16 @@ ChunkResult handleDuplicateSample(DuplicatePolicy policy, Sample oldSample, Samp
         case DP_LAST:
             return CR_OK;
         case DP_MIN:
-            newSample->value = min(oldSample.value, newSample->value);
+            VALUE_DOUBLE(&newSample->value) =
+                min(VALUE_DOUBLE(&oldSample.value), VALUE_DOUBLE(&newSample->value));
             return CR_OK;
         case DP_MAX:
-            newSample->value = max(oldSample.value, newSample->value);
+            VALUE_DOUBLE(&newSample->value) =
+                max(VALUE_DOUBLE(&oldSample.value), VALUE_DOUBLE(&newSample->value));
             return CR_OK;
         case DP_SUM:
-            newSample->value = oldSample.value + newSample->value;
+            VALUE_DOUBLE(&newSample->value) =
+                VALUE_DOUBLE(&oldSample.value) + VALUE_DOUBLE(&newSample->value);
             return CR_OK;
         default:
             return CR_ERR;
@@ -154,4 +157,18 @@ DuplicatePolicy DuplicatePolicyFromString(const char *input, size_t len) {
         }
     }
     return DP_INVALID;
+}
+
+void updateSampleValue(bool isblob, SampleValue *dest, const SampleValue *src) {
+    if (!isblob) {
+        VALUE_DOUBLE(dest) = VALUE_DOUBLE(src);
+        return;
+    }
+
+    TSBlob *blob = VALUE_BLOB(dest);
+    if (blob->data) {
+        RedisModule_Free(blob->data);
+    }
+    blob->data = VALUE_BLOB(src)->data;
+    blob->len = VALUE_BLOB(src)->len;
 }
