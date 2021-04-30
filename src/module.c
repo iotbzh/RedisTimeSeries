@@ -347,7 +347,7 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
         return REDISMODULE_ERR;
     }
 
-    AggregationClass *aggObject = rangeArgs.aggregationArgs.aggregationClass;
+    agg_type = rangeArgs.aggregationArgs.type;
     if (SeriesIsBlob(series) && !IsCompactionBlobFriendly(agg_type)) {
         RTS_ReplyGeneralError(ctx, "Aggregation type is not allowed with blob series");
         return REDISMODULE_ERR;

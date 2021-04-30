@@ -200,7 +200,7 @@ class TSInfo(object):
         if b'chunkSize' in response: self.chunk_size_bytes = response[b'chunkSize']
         if b'chunkType' in response: self.chunk_type = response[b'chunkType']
         if b'Chunks' in response: self.chunks = response[b'Chunks']
-	if b'type' in response: self.type = response[b'type']
+        if b'type' in response: self.type = response[b'type']
 
     def __eq__(self, other):
         if not isinstance(other, TSInfo):
